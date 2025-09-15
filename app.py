@@ -213,6 +213,9 @@ class VideoConcatApp(QWidget):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = VideoConcatApp()
+
+    icon = QIcon("app-logo.png")
+    window.setWindowIcon(icon)
     window.resize(900, 350)
     window.show()
     sys.exit(app.exec())
