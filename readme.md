@@ -1,5 +1,7 @@
 # No-Encode Video Joiner
 
+![Logo](app-logo.png)
+
 A simple PyQt6 desktop application to join/concatenate video files **without re-encoding** using FFmpeg.
 
 ## Features
