@@ -6,7 +6,8 @@ from PyQt6.QtGui import QPixmap, QDragEnterEvent, QDropEvent, QIcon
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QListWidget, QListWidgetItem, QAbstractItemView, QMessageBox, QCheckBox
+    QListWidget, QListWidgetItem, QAbstractItemView, QMessageBox, QCheckBox,
+    QSizePolicy
 )
 from ffmpeg_utilities import get_video_info, get_thumbnail, seconds_to_hms
 from settings_dialog import SettingsDialog
@@ -63,7 +64,8 @@ class VideoConcatApp(QWidget):
             "Drag and drop video files, then hit 'Join Videos' - Videos must be the same dimensions, codec, fps, etc."
         )
         instruction_label.setWordWrap(True)
-        instruction_label.setStyleSheet("font-weight: bold; color: #333; margin-bottom: 8px;")
+        instruction_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        #instruction_label.setStyleSheet("font-weight: bold; color: #fff; margin-bottom: 8px;")
         top_bar.addWidget(instruction_label)
 
         # Gear icon button
