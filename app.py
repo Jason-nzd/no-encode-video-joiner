@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QListWidget, QListWidgetItem, QAbstractItemView, QMessageBox, QCheckBox,
-    QSizePolicy
+    QSizePolicy, QScrollArea
 )
 from ffmpeg_utilities import get_video_info, get_thumbnail, seconds_to_hms
 from settings_dialog import SettingsDialog
@@ -26,21 +26,55 @@ from settings_dialog import SettingsDialog
 # or manually specify their paths in the settings.
 # ------------------------------
 
-# Represents a video file as a thumbnail with title and duration
+# Represents a video file as a thumbnail with title and other video info
 class VideoItemWidget(QWidget):    
     def __init__(self, filepath, parent=None):
         super().__init__(parent)
         self.filepath = filepath
-        self.title, self.duration = get_video_info(filepath)
+
+        # Get video info and thumbnail with ffmpeg
+        self.title, self.duration, self.codec = get_video_info(filepath)
         self.thumb_path = get_thumbnail(filepath)
+
+        # Layout
         layout = QVBoxLayout()
-        pixmap = QPixmap(self.thumb_path) if self.thumb_path else QPixmap()
+        layout.alignment = Qt.AlignmentFlag.AlignLeft
+        layout.alignment = Qt.AlignmentFlag.AlignVCenter
+        desiredWidgetWidth = 300
+
+        # Load thumbnail image
+        pixmap = QPixmap(self.thumb_path) if self.thumb_path else QPixmap()     
         thumb_label = QLabel()
-        thumb_label.setPixmap(pixmap.scaled(300, 300, Qt.AspectRatioMode.KeepAspectRatio))
+        thumb_label.setPixmap(pixmap.scaled(desiredWidgetWidth, desiredWidgetWidth, Qt.AspectRatioMode.KeepAspectRatio))
         layout.addWidget(thumb_label)
-        layout.addWidget(QLabel(self.title))
-        layout.addWidget(QLabel(seconds_to_hms(self.duration)))
+
+        # Title label inside a scroll area
+        title_label = QLabel(self.title)
+        title_label.setWordWrap(False)
+        scroll_area = QScrollArea()
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll_area.setFixedWidth(desiredWidgetWidth)
+        scroll_area.setFixedHeight(36)
+        scroll_area.setWidget(title_label)
+        layout.addWidget(scroll_area)
+
+        # Duration and Codec in a single row
+        info_row = QHBoxLayout()
+
+        duration_label = QLabel("Duration: " + seconds_to_hms(self.duration))
+        info_row.addWidget(duration_label, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        codec_label = QLabel(self.codec)
+        codec_label.setStyleSheet("QLabel { font-weight: bold; }")
+        info_row.addWidget(codec_label, alignment=Qt.AlignmentFlag.AlignRight)
+
+        layout.addLayout(info_row)
+
+        # Set the main layout
         self.setLayout(layout)
+        self.setFixedHeight(desiredWidgetWidth)  # Ensure fixed height
 
     def cleanup(self):
         if self.thumb_path and os.path.exists(self.thumb_path):
@@ -61,11 +95,10 @@ class VideoConcatApp(QWidget):
         # Top bar with instructions and gear icon
         top_bar = QHBoxLayout()
         instruction_label = QLabel(
-            "Drag and drop video files, then hit 'Join Videos' - Videos must be the same dimensions, codec, fps, etc."
+            "Drag and drop video files, re-order as needed, then hit 'Join Videos' - Videos must be the same dimensions, codec, fps, etc."
         )
         instruction_label.setWordWrap(True)
         instruction_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        #instruction_label.setStyleSheet("font-weight: bold; color: #fff; margin-bottom: 8px;")
         top_bar.addWidget(instruction_label)
 
         # Gear icon button
@@ -76,19 +109,20 @@ class VideoConcatApp(QWidget):
             gear_btn.setText("⚙")
         else:
             gear_btn.setIcon(gear_icon)
-        gear_btn.setFixedSize(32, 32)
+        gear_btn.setFixedSize(48, 48)
         gear_btn.setToolTip("Settings")
         gear_btn.clicked.connect(self.show_settings)
         top_bar.addWidget(gear_btn, alignment=Qt.AlignmentFlag.AlignRight)
         main_layout.addLayout(top_bar)
 
+        # List widget for video items
         self.list_widget = QListWidget()
         self.list_widget.setViewMode(QListWidget.ViewMode.IconMode)
-        self.list_widget.setMovement(QListWidget.Movement.Free)
+        self.list_widget.setMovement(QListWidget.Movement.Snap)
         self.list_widget.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
-        self.list_widget.setSpacing(10)
+        self.list_widget.setFlow(QListWidget.Flow.LeftToRight)
         self.list_widget.setResizeMode(QListWidget.ResizeMode.Adjust)
-        self.list_widget.setFixedHeight(180)
+        self.list_widget.setFixedHeight(300)
         main_layout.addWidget(self.list_widget)
 
         btn_layout = QHBoxLayout()
@@ -134,18 +168,17 @@ class VideoConcatApp(QWidget):
     def dropEvent(self, event: QDropEvent):
         for url in event.mimeData().urls():
             filepath = url.toLocalFile()
-            if filepath.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm')):
-                self.add_video(filepath)
-        self.update_ffmpeg_cmd()
 
-    def add_video(self, filepath):
-        if filepath not in self.video_files:
-            item = QListWidgetItem()
-            widget = VideoItemWidget(filepath)
-            item.setSizeHint(widget.sizeHint())
-            self.list_widget.addItem(item)
-            self.list_widget.setItemWidget(item, widget)
-            self.video_files.append(filepath)
+            # If valid video file, add to list
+            if filepath.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm')):
+                item = QListWidgetItem()
+                widget = VideoItemWidget(filepath)
+                item.setSizeHint(widget.sizeHint())
+                self.list_widget.addItem(item)
+                self.list_widget.setItemWidget(item, widget)
+                self.video_files.append(filepath)
+
+        self.update_ffmpeg_cmd()
 
     def clear_list(self):
         for i in range(self.list_widget.count()):
@@ -216,6 +249,6 @@ if __name__ == "__main__":
 
     icon = QIcon("app-logo.png")
     window.setWindowIcon(icon)
-    window.resize(900, 350)
+    window.resize(900, 500)
     window.show()
     sys.exit(app.exec())
