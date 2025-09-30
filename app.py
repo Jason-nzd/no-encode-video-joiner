@@ -13,7 +13,7 @@ from ffmpeg_utilities import get_video_info, get_thumbnail, seconds_to_hms
 from settings_dialog import SettingsDialog
 
 # No-Encode Video Joiner
-# ------------------------------
+# -------------------------------------------------------------------------------------
 # A PyQt6 application to join/concatenate video files without re-encoding using ffmpeg.
 
 # Drag and drop video files, reorder them, then join them with a single click.
@@ -24,7 +24,7 @@ from settings_dialog import SettingsDialog
 
 # Requires ffmpeg and ffprobe to be installed and accessible in the system PATH,
 # or manually specify their paths in the settings.
-# ------------------------------
+# -------------------------------------------------------------------------------------
 
 # Represents a video file as a thumbnail with title and other video info
 class VideoItemWidget(QWidget):    
@@ -115,6 +115,7 @@ class VideoItemWidget(QWidget):
         if self.thumb_path and os.path.exists(self.thumb_path):
             os.remove(self.thumb_path)
 
+# Main Application Window
 class VideoConcatApp(QWidget):
     def __init__(self):
         super().__init__()
@@ -125,9 +126,16 @@ class VideoConcatApp(QWidget):
         self.ffprobe_path = "ffprobe"
         self.manual_override = False
 
+        # Main layout is a vertical stack of:
+        # 1) Top bar with instructions and settings button
+        # 2) List widget containing video items
+        # 3) Bottom controls with checkbox and join/clear buttons
+        # 4) FFmpeg command preview label
         main_layout = QVBoxLayout()
 
-        # Top bar with instructions and gear icon
+
+        # --- Top bar ---
+        # Instructions label
         top_bar = QHBoxLayout()
         instruction_label = QLabel(
             "Drag and drop video files, re-order as needed, then hit 'Join Videos' - " \
@@ -138,7 +146,7 @@ class VideoConcatApp(QWidget):
         instruction_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         top_bar.addWidget(instruction_label)
 
-        # Gear icon button
+        # Settings gear icon button
         gear_btn = QPushButton()
         gear_icon = QIcon.fromTheme("settings")
         if gear_icon.isNull():
@@ -151,8 +159,10 @@ class VideoConcatApp(QWidget):
         gear_btn.clicked.connect(self.show_settings)
         top_bar.addWidget(gear_btn, alignment=Qt.AlignmentFlag.AlignRight)
         main_layout.addLayout(top_bar)
+        # --- End Top bar ---
 
-        # List widget for video items
+
+        # --- List widget for video items ---
         self.list_widget = QListWidget()
         self.list_widget.setViewMode(QListWidget.ViewMode.IconMode)
         self.list_widget.setMovement(QListWidget.Movement.Snap)
@@ -161,10 +171,7 @@ class VideoConcatApp(QWidget):
         self.list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.list_widget.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.list_widget.setWrapping(False)
-
-        # set list widget items to have a fixed size of 300x300
         self.list_widget.setGridSize(QPixmap(300, 300).size())
-
         main_layout.addWidget(self.list_widget)
 
         # Add 3 empty placeholders at start
@@ -174,6 +181,8 @@ class VideoConcatApp(QWidget):
             item.setSizeHint(widget.sizeHint())
             self.list_widget.addItem(item)
             self.list_widget.setItemWidget(item, widget)
+        # --- End List widget ---
+
 
         # --- Bottom Controls ---
         controls_row = QHBoxLayout()
@@ -201,10 +210,17 @@ class VideoConcatApp(QWidget):
         self.clear_btn.clicked.connect(self.clear_list)
         self.clear_btn.setFixedSize(200, button_height)
         controls_row.addWidget(self.clear_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        # Shadow effect on the button
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(8)
+        shadow.setOffset(2, 2)
+        shadow.setColor(0)
+        self.clear_btn.setGraphicsEffect(shadow)
 
         main_layout.addLayout(controls_row)
         # --- End Bottom Controls ---
 
+        # --- FFmpeg command preview label ---
         self.ffmpeg_cmd_label = QLabel("FFmpeg Command Preview:")
         self.ffmpeg_cmd_label.setContentsMargins(8, 0, 8, 8)
         main_layout.addWidget(self.ffmpeg_cmd_label)
@@ -260,6 +276,7 @@ class VideoConcatApp(QWidget):
                 widget.cleanup()
         self.list_widget.clear()
         self.video_files.clear()
+        
         # Re-add 3 empty placeholders
         for _ in range(3):
             item = QListWidgetItem()
@@ -305,13 +322,16 @@ class VideoConcatApp(QWidget):
                 self.ffmpeg_path, "-f", "concat", "-safe", "0", "-i", self.concat_file,
                 "-c", "copy", self.out_file
             ], check=True)
+
             QMessageBox.information(self, "Done", f"Concatenation complete!\nSaved to:\n{self.out_file}")
+
             if self.delete_old_checkbox.isChecked():
                 for file in files:
                     try:
                         os.remove(file)
                     except Exception as e:
                         QMessageBox.warning(self, "Warning", f"Could not delete {file}:\n{e}")
+
             self.clear_list()
         except subprocess.CalledProcessError:
             QMessageBox.critical(self, "Error", "FFmpeg failed to concatenate the videos.")
