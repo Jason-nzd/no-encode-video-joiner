@@ -2,6 +2,7 @@ import sys
 import os
 import subprocess
 import tempfile
+import re
 from PyQt6.QtGui import QPixmap, QDragEnterEvent, QDropEvent, QIcon
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -9,7 +10,6 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem, QAbstractItemView, QMessageBox, QCheckBox,
     QSizePolicy, QScrollArea, QGraphicsDropShadowEffect
 )
-from ffmpeg_utilities import get_video_info, get_thumbnail, seconds_to_hms
 from settings_dialog import SettingsDialog
 
 # No-Encode Video Joiner
@@ -26,16 +26,54 @@ from settings_dialog import SettingsDialog
 # or manually specify their paths in the settings.
 # -------------------------------------------------------------------------------------
 
-# Represents a video file as a thumbnail with title and other video info
-class VideoItemWidget(QWidget):    
+
+class FFMPEG():
+    def get_video_info(filepath):
+        # Prepare temporary file for thumbnail
+        thumb_fd, thumb_path = tempfile.mkstemp(suffix=".jpg")
+        os.close(thumb_fd)
+
+        # Get title from filename
+        title = os.path.basename(filepath)
+
+        # Generate thumbnail into temp file
+        subprocess.run([
+            "ffmpeg",
+            "-i", filepath,
+            '-vf', 'select=eq(n\\,5)',  # Select the 6th frame (0-based index)
+            '-vframes', '1',  # Output one frame
+            '-q:v', '2',  # Quality level (lower is better)
+            thumb_path,
+            '-y'
+        ], capture_output=True, text=True)
+
+        # Probe for metadata using ffmpeg
+        probe_cmd = ['ffmpeg', '-i', filepath]
+        result = subprocess.run(
+            probe_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output = result.stderr.decode()
+
+        # Use regex to parse duration and codec from ffmpeg output
+        duration_match = re.search(r'Duration: (\d+:\d+:\d+)', output)
+        video_match = re.search(r'Stream.*Video: (\w+)', output)
+
+        duration = duration_match.group(1) if duration_match else "0:00:00"
+        codec = video_match.group(1) if video_match else ""
+
+        # Return title, thumbnail path, duration, and codec
+        return title, thumb_path, duration, codec
+
+
+class VideoItemWidget(QWidget):
+    # Represents a video file as a thumbnail with title and other video info
     def __init__(self, filepath=None, parent=None):
         super().__init__(parent)
         self.filepath = filepath
 
         # If filepath is provided, show video info and thumbnail
         if filepath:
-            self.title, self.duration, self.codec = get_video_info(filepath)
-            self.thumb_path = get_thumbnail(filepath)
+            self.title, self.thumb_path, self.duration, self.codec = FFMPEG.get_video_info(
+                filepath)
         else:
             self.title, self.duration, self.codec = "", 0, ""
             self.thumb_path = None
@@ -50,8 +88,9 @@ class VideoItemWidget(QWidget):
         thumb_label.setFixedSize(desiredWidgetWidth, desiredWidgetWidth)
         if self.thumb_path:
             pixmap = QPixmap(self.thumb_path)
-            thumb_label.setPixmap(pixmap.scaled(desiredWidgetWidth, desiredWidgetWidth, Qt.AspectRatioMode.KeepAspectRatio))
-            
+            thumb_label.setPixmap(pixmap.scaled(
+                desiredWidgetWidth, desiredWidgetWidth, Qt.AspectRatioMode.KeepAspectRatio))
+
         else:
             # Draw a placeholder square with a dashed border and icon/text
             placeholder = QPixmap(desiredWidgetWidth, desiredWidgetWidth)
@@ -60,12 +99,14 @@ class VideoItemWidget(QWidget):
             painter = QPainter(placeholder)
             pen = QPen(QColor("gray"), 3, Qt.PenStyle.DashLine)
             painter.setPen(pen)
-            painter.drawRect(10, 10, desiredWidgetWidth-20, desiredWidgetWidth-20)
+            painter.drawRect(10, 10, desiredWidgetWidth -
+                             20, desiredWidgetWidth-20)
             painter.setPen(QColor("gray"))
             font = QFont()
             font.setPointSize(18)
             painter.setFont(font)
-            painter.drawText(placeholder.rect(), Qt.AlignmentFlag.AlignCenter, "＋")
+            painter.drawText(placeholder.rect(),
+                             Qt.AlignmentFlag.AlignCenter, "＋")
             painter.end()
             thumb_label.setPixmap(placeholder)
 
@@ -76,8 +117,10 @@ class VideoItemWidget(QWidget):
         title_label = QLabel(self.title)
         title_label.setWordWrap(False)
         scroll_area = QScrollArea()
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll_area.setFixedWidth(desiredWidgetWidth-10)
         scroll_area.setAlignment(Qt.AlignmentFlag.AlignHCenter)
@@ -89,22 +132,25 @@ class VideoItemWidget(QWidget):
                     color: white; 
                     font-weight: bold; }
             """)
-        
+
         # Add drop shadow to title text for better visibility
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(4)
         shadow.setOffset(2, 2)
         shadow.setColor(0)
         scroll_area.setGraphicsEffect(shadow)
-        
+
         layout.addWidget(scroll_area)
 
         # Duration and Codec in a single row
         info_row = QHBoxLayout()
-        duration_label = QLabel("Duration: " + seconds_to_hms(self.duration) if self.duration else "")
-        info_row.addWidget(duration_label, alignment=Qt.AlignmentFlag.AlignLeft)
+        duration_label = QLabel(
+            "Duration: " + (self.duration) if self.duration else "")
+        info_row.addWidget(
+            duration_label, alignment=Qt.AlignmentFlag.AlignLeft)
         codec_label = QLabel(self.codec)
-        codec_label.setStyleSheet("QLabel { color: white; font-weight: bold; }")
+        codec_label.setStyleSheet(
+            "QLabel { color: white; font-weight: bold; }")
         info_row.addWidget(codec_label, alignment=Qt.AlignmentFlag.AlignRight)
         layout.addLayout(info_row)
 
@@ -115,8 +161,9 @@ class VideoItemWidget(QWidget):
         if self.thumb_path and os.path.exists(self.thumb_path):
             os.remove(self.thumb_path)
 
-# Main Application Window
+
 class VideoConcatApp(QWidget):
+    # Main Application Window
     def __init__(self):
         super().__init__()
         self.setWindowTitle("No-Encode Video Joiner")
@@ -133,16 +180,16 @@ class VideoConcatApp(QWidget):
         # 4) FFmpeg command preview label
         main_layout = QVBoxLayout()
 
-
         # --- Top bar ---
         # Instructions label
         top_bar = QHBoxLayout()
         instruction_label = QLabel(
-            "Drag and drop video files, re-order as needed, then hit 'Join Videos' - " \
+            "Drag and drop video files, re-order as needed, then hit 'Join Videos' - "
             "Videos must be the same dimensions, codec, fps, etc."
         )
         instruction_label.setWordWrap(True)
-        instruction_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        instruction_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         instruction_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         top_bar.addWidget(instruction_label)
 
@@ -161,15 +208,17 @@ class VideoConcatApp(QWidget):
         main_layout.addLayout(top_bar)
         # --- End Top bar ---
 
-
         # --- List widget for video items ---
         self.list_widget = QListWidget()
         self.list_widget.setViewMode(QListWidget.ViewMode.IconMode)
         self.list_widget.setMovement(QListWidget.Movement.Snap)
-        self.list_widget.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.list_widget.setDragDropMode(
+            QAbstractItemView.DragDropMode.InternalMove)
         self.list_widget.setFlow(QListWidget.Flow.LeftToRight)
-        self.list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.list_widget.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.list_widget.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.list_widget.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.list_widget.setWrapping(False)
         self.list_widget.setGridSize(QPixmap(300, 300).size())
         main_layout.addWidget(self.list_widget)
@@ -183,21 +232,23 @@ class VideoConcatApp(QWidget):
             self.list_widget.setItemWidget(item, widget)
         # --- End List widget ---
 
-
         # --- Bottom Controls ---
         controls_row = QHBoxLayout()
         controls_row.setContentsMargins(8, 12, 8, 8)
         button_height = 40
 
         # Left: Delete old videos checkbox
-        self.delete_old_checkbox = QCheckBox("Delete old video files after successful join")
-        controls_row.addWidget(self.delete_old_checkbox, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.delete_old_checkbox = QCheckBox(
+            "Delete old video files after successful join")
+        controls_row.addWidget(self.delete_old_checkbox,
+                               alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Center: Join Videos button
         self.run_btn = QPushButton("Join Videos")
         self.run_btn.clicked.connect(self.run_concat)
         self.run_btn.setFixedSize(200, button_height)
-        controls_row.addWidget(self.run_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        controls_row.addWidget(
+            self.run_btn, alignment=Qt.AlignmentFlag.AlignCenter)
         # Shadow effect on the button
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(8)
@@ -209,7 +260,8 @@ class VideoConcatApp(QWidget):
         self.clear_btn = QPushButton("Clear List")
         self.clear_btn.clicked.connect(self.clear_list)
         self.clear_btn.setFixedSize(200, button_height)
-        controls_row.addWidget(self.clear_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        controls_row.addWidget(
+            self.clear_btn, alignment=Qt.AlignmentFlag.AlignCenter)
         # Shadow effect on the button
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(8)
@@ -229,7 +281,8 @@ class VideoConcatApp(QWidget):
         self.update_ffmpeg_cmd()
 
     def show_settings(self):
-        dlg = SettingsDialog(self, self.ffmpeg_path, self.ffprobe_path, self.manual_override)
+        dlg = SettingsDialog(self, self.ffmpeg_path,
+                             self.ffprobe_path, self.manual_override)
         if dlg.exec():
             ffmpeg_path, ffprobe_path, manual_override = dlg.get_paths()
             self.manual_override = manual_override
@@ -253,11 +306,14 @@ class VideoConcatApp(QWidget):
             if filepath.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm')):
                 # Find first placeholder and replace it, else append
                 for i in range(self.list_widget.count()):
-                    widget = self.list_widget.itemWidget(self.list_widget.item(i))
+                    widget = self.list_widget.itemWidget(
+                        self.list_widget.item(i))
                     if isinstance(widget, VideoItemWidget) and not widget.filepath:
                         new_widget = VideoItemWidget(filepath)
-                        self.list_widget.setItemWidget(self.list_widget.item(i), new_widget)
-                        self.list_widget.item(i).setSizeHint(new_widget.sizeHint())
+                        self.list_widget.setItemWidget(
+                            self.list_widget.item(i), new_widget)
+                        self.list_widget.item(i).setSizeHint(
+                            new_widget.sizeHint())
                         self.video_files.append(filepath)
                         break
                 else:
@@ -276,7 +332,7 @@ class VideoConcatApp(QWidget):
                 widget.cleanup()
         self.list_widget.clear()
         self.video_files.clear()
-        
+
         # Re-add 3 empty placeholders
         for _ in range(3):
             item = QListWidgetItem()
@@ -315,7 +371,8 @@ class VideoConcatApp(QWidget):
         self.update_ffmpeg_cmd()
         files = self.get_current_file_order()
         if not files or not hasattr(self, 'concat_file'):
-            QMessageBox.warning(self, "Error", "No video files to concatenate.")
+            QMessageBox.warning(
+                self, "Error", "No video files to concatenate.")
             return
         try:
             subprocess.run([
@@ -323,18 +380,21 @@ class VideoConcatApp(QWidget):
                 "-c", "copy", self.out_file
             ], check=True)
 
-            QMessageBox.information(self, "Done", f"Concatenation complete!\nSaved to:\n{self.out_file}")
+            QMessageBox.information(
+                self, "Done", f"Concatenation complete!\nSaved to:\n{self.out_file}")
 
             if self.delete_old_checkbox.isChecked():
                 for file in files:
                     try:
                         os.remove(file)
                     except Exception as e:
-                        QMessageBox.warning(self, "Warning", f"Could not delete {file}:\n{e}")
+                        QMessageBox.warning(
+                            self, "Warning", f"Could not delete {file}:\n{e}")
 
             self.clear_list()
         except subprocess.CalledProcessError:
-            QMessageBox.critical(self, "Error", "FFmpeg failed to concatenate the videos.")
+            QMessageBox.critical(
+                self, "Error", "FFmpeg failed to concatenate the videos.")
         finally:
             if os.path.exists(self.concat_file):
                 os.remove(self.concat_file)
@@ -343,13 +403,14 @@ class VideoConcatApp(QWidget):
         self.clear_list()
         event.accept()
 
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = VideoConcatApp()
 
     icon = QIcon("app-logo.png")
     window.setWindowIcon(icon)
-    
+
     window.setMinimumSize(930, 470)
     window.show()
     sys.exit(app.exec())
