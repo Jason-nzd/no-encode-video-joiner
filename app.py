@@ -15,6 +15,7 @@ from settings_dialog import SettingsDialog
 # No-Encode Video Joiner
 # -------------------------------------------------------------------------------------
 # A PyQt6 application to join/concatenate video files without re-encoding using ffmpeg.
+# Not re-encoding means the process is very fast and there is no quality loss.
 
 # Drag and drop video files, reorder them, then join them with a single click.
 # (Videos must have the same codec, dimensions, fps, etc.)
@@ -22,8 +23,8 @@ from settings_dialog import SettingsDialog
 # Requires PyQt6. Install with:
 # pip install PyQt6
 
-# Requires ffmpeg and ffprobe to be installed and accessible in the system PATH,
-# or manually specify their paths in the settings.
+# Requires ffmpeg to be installed and accessible either in the system PATH,
+# or as a manually specified executable.
 # -------------------------------------------------------------------------------------
 
 
@@ -372,7 +373,7 @@ class VideoConcatApp(QWidget):
         files = self.get_current_file_order()
         if not files or not hasattr(self, 'concat_file'):
             QMessageBox.warning(
-                self, "Error", "No video files to concatenate.")
+                self, "Error", "No video files to join.")
             return
         try:
             subprocess.run([
@@ -381,7 +382,7 @@ class VideoConcatApp(QWidget):
             ], check=True)
 
             QMessageBox.information(
-                self, "Done", f"Concatenation complete!\nSaved to:\n{self.out_file}")
+                self, "Done", f"Joining complete!\nSaved to:\n{self.out_file}")
 
             if self.delete_old_checkbox.isChecked():
                 for file in files:
@@ -394,7 +395,7 @@ class VideoConcatApp(QWidget):
             self.clear_list()
         except subprocess.CalledProcessError:
             QMessageBox.critical(
-                self, "Error", "FFmpeg failed to concatenate the videos.")
+                self, "Error", "FFmpeg failed to join the videos.")
         finally:
             if os.path.exists(self.concat_file):
                 os.remove(self.concat_file)

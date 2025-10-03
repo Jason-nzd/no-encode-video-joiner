@@ -2,7 +2,7 @@
 
 ![Logo](app-logo.png)
 
-A simple PyQt6 desktop application to join/concatenate video files **without re-encoding** using FFmpeg.
+A simple PyQt6 desktop application to join/concatenate video files **without re-encoding** using FFmpeg. Not re-encoding means the process is very fast and there is no quality loss.
 
 ## Features
 
@@ -17,7 +17,7 @@ A simple PyQt6 desktop application to join/concatenate video files **without re-
 
 - Python 3.8+
 - [PyQt6](https://pypi.org/project/PyQt6/)
-- [FFmpeg](https://ffmpeg.org/) and [ffprobe](https://ffmpeg.org/ffprobe.html) installed and accessible in your system PATH, or specify their paths in the settings.
+- [FFmpeg](https://ffmpeg.org/) installed and accessible in your system PATH, or as a manually specified executable.
 
 ## Installation
 
@@ -49,7 +49,7 @@ A simple PyQt6 desktop application to join/concatenate video files **without re-
 
 4. Click **Join Videos**.
 
-5. Optionally, click the **gear icon** to open settings and manually set FFmpeg paths.
+5. Optionally, click the **gear icon** to open settings and manually set FFmpeg path.
 
 ## Notes
 
